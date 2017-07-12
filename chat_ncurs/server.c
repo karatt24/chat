@@ -40,7 +40,7 @@ struct list_client *root=NULL;
 
 pthread_mutex_t mut=PTHREAD_MUTEX_INITIALIZER;
 
-int dueue(int m, int n){
+int queue(int m, int n){
 	key_t key;
 	key = ftok("/", m);
 	if(n == 0)
@@ -59,23 +59,23 @@ void controll_clients(int *fd){
         	        err = errno;
                         if(err == ENOMSG)
                                 continue;
-                        perror(msgrcv);
-                        return 1;
+                        perror("msgrcv");
+                        return;
 		}
 		pthread_mutex_lock(&mut);
 			struct list_client *bufer, *tmp;
 			bufer = malloc(sizeof(struct list_client));
-			snprintf(bufer.name, 256, "%s", buf.name);
-			bufer.id = buf.id;
-			bufer.next=NULL;
+			snprintf(bufer->name, 256, "%s", buf.name);
+			bufer->id = buf.id;
+			bufer->next=NULL;
 			if(root == NULL){
 				root = bufer;
-				root.next = NULL;
+				root->next = NULL;
 			}else{
 				tmp = root;
 				while(tmp!=NULL)
-					tmp=tmp.next;
-				tmp.next = bufer;
+					tmp=tmp->next;
+				tmp->next = bufer;
 				free(bufer);
 			}
 		pthread_mutex_unlock(&mut);
@@ -84,68 +84,74 @@ void controll_clients(int *fd){
 
 void chat(int *fd){
 	long list_id[100];
-	int i,res, err, k;
-	struct msgchat buf, send;
+	int i, res, err, k;
+	struct msgchat buf = { 0 }, *send;
+	struct all_clients *list;
 	struct list_client *tmp;
+	list = malloc(sizeof(struct all_clients));
 	send = malloc(sizeof(struct msgchat));
 	while(1){
 		i=0;
 		pthread_mutex_lock(&mut);
 		tmp=root;
 		while(tmp!=NULL){
-                        list_id[i]=tmp->id
-                        strcpy(send.list[i],tmp.name);
-                        i++;
-                        tmp=tmp.next;
-                }
+            list_id[i]=tmp->id;
+            i++;
+            tmp=tmp->next;
+        }
+        pthread_mutex_unlock(&mut);
 		k=i;
 		for(i=0; i<k+1; i++){
-                	res = msgrcv(fd[1], &buf, sizeof(struct msgchat), list_id[i], 0);
+            res = msgrcv(fd[1], &buf, sizeof(struct msgchat), list_id[i], 0);
 	 		if(res < 0){
 				err = errno;
-                	        if(err == ENOMSG)
-                        	        continue;
-                	        perror(msgrcv);
-                        	return 1;
+                if(err == ENOMSG)
+                    continue;
+                perror("msgrcv");
+                return;
 			}
+			pthread_mutex_lock(&mut);
 			tmp=root;
 			if(tmp == NULL)
 				continue;
 			while(tmp != NULL){
-				send.mtype = tmp.id;
-				send.name = tmp.name;
-				snprintf(send.message, "%s", buf.message);
+				send->mtype = tmp->id;
+				snprintf(send->name, 256, "%s", tmp->name);
+				snprintf(send->message, 256, "%s", buf.message);
 				msgsnd(fd[1], &send, sizeof(struct msgchat), 0);
-				tmp=tmp.next;
+				tmp=tmp->next;
 			}
+			pthread_mutex_unlock(&mut);
 		}
-		pthread_mutex_unlock(&mut);
+		
 	}
 
 }
 
-void clients(){
+void clients(int *fd){
 	long list_id[100];
-	int i;
-        struct all_clients send;
-        struct list_client *tmp;
-        send = malloc(sizeof(struct all_clients));
+	int i, j;
+    struct all_clients *send;
+    struct list_client *tmp;
+    send = malloc(sizeof(struct all_clients));
 	while(1){
 		i=0;
 		sleep(0.1);
 		pthread_mutex_lock(&mut);
 			tmp=root;
-		        while(tmp!=NULL){
-				list_id[i]=tmp->id
-				strcpy(send.list[i],tmp.name);
+		    while(tmp!=NULL){
+				list_id[i]=tmp->id;
+				strcpy(send->list[i], tmp->name);
 				i++;
-				tmp=tmp.next;
-			}
+				tmp=tmp->next;
+			}				
 			if (i < 100 )
-				sprintf(send.list[i+1], "end");
+				sprintf(send->list[i+1], "end");
+			else 
+				continue;
 			j=i+1;
 			for(i=0; i < j; i++){
-				send.mtype=list_id[i];
+				send->mtype=list_id[i];
 				msgsnd(fd[1], &send, sizeof(struct msglist), 0);
 			}
 		pthread_mutex_unlock(&mut);
@@ -154,11 +160,10 @@ void clients(){
 
 int main(){
 
-        pid_t pid;
-        int *fd, dev_null, res, err;
+    pid_t pid;
+    int *fd, dev_null, res, err;
 	struct list_client *root;
 	struct msglist buf_list;
-	pthread_mutex_init(&mut, NULL);
 	pthread_t tid[2];
 	fd = malloc(sizeof(int)*3);
         pid = fork();
@@ -169,10 +174,12 @@ int main(){
                 dup2(dev_null, 0);
                 dup2(dev_null, 1);
 
-		fd[0] = queue('m', 0);
+		fd[0] = queue(1, 0);
 		fd[1] = queue('n', 0);
 		fd[2] = queue('w', 0);
-		pthread_create(&tid[0], NULL, controll_clients, (void*)fd);
+		pthread_create(&tid[0], NULL, (void *)controll_clients, (void*)fd);
+		pthread_create(&tid[0], NULL, (void *)chat, (void*)fd);
+		pthread_create(&tid[0], NULL, (void *)clients, (void*)fd);
 		while(1){
 			sleep(0.5);
 
