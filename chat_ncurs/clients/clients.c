@@ -111,7 +111,7 @@ int main(){
 	struct msgchat send;
 	pid_t pid;
 	pthread_t tid[2];
-	message = malloc(2048);
+	message = calloc(2048, 1);
 	fd = malloc(sizeof(int)*2);
 	fd[0] = queue('m', 1);
 	fd[1] = queue('n', 1);
@@ -122,7 +122,7 @@ int main(){
 	connect(fd);
 	pthread_create(&tid[1], NULL, (void *)resive, (void*)fd);
 	while(strcmp(message, "/quit") != 0){
-		gets(message);
+		fgets(message, 2047, stdin);
 		send.mtype = my_id;
 		snprintf(send.name, 256, "%s", name);
 		snprintf(send.message, 2048, "%s", message);
