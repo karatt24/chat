@@ -74,8 +74,8 @@ void connect(int *fd){
                                 continue;
                         perror("msgrcv");
                         return;
-                }else{
-*/		if(strcmp(ans->name, "OK"))
+                }else{*/
+		if(strncmp(ans->name, "OK", 2) == 0)
 			printf("Connect - OK!");
 	//	}
 	}
@@ -85,18 +85,27 @@ void resive(int *fd){
 	struct list_client buf;
 	struct msgchat mess;
 	long my_id;
-	int i=0;
+	int i=0, res, err;
 	pid_t pid;
 	pid=getpid();
 	my_id=(long)pid;
 
-	msgrcv(fd[2], &buf, sizeof(struct list_client), my_id, 0);
 	while(1){
+		res=0;
+		i = 0;
+		res = msgrcv(fd[2], &buf, sizeof(struct list_client), my_id, IPC_NOWAIT);
+		if(res < 0){
+			err = errno;
+			if(err == ENOMSG)
+				continue;
+			perror("msgrcv");
+			return;
+		}
 	    	printf("---------------clients---------------\n");
-    		while(strcmp(buf.name[i], "end")){
+		while(strcmp(buf.name[i], "end")){
 	            printf("%s", buf.name[i]);
-        	    i++;
-       		}
+		    i++;
+		}
        		printf("\n----------------chat-----------------\n");
         	msgrcv(fd[1], &mess, sizeof(struct msgchat), my_id, 0);
 		printf("%s: %s", mess.name, mess.message);
@@ -122,6 +131,8 @@ int main(){
 	connect(fd);
 	pthread_create(&tid[1], NULL, (void *)resive, (void*)fd);
 	while(strcmp(message, "/quit") != 0){
+		sleep(0.1);
+		printf("Inter yuor message:\n");
 		fgets(message, 2047, stdin);
 		send.mtype = my_id;
 		snprintf(send.name, 256, "%s", name);

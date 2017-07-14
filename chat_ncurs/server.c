@@ -94,12 +94,13 @@ void controll_clients(int *fd){
 void chat(int *fd){
 	long list_id[100];
 	int i, res, err, k;
-	struct msgchat buf = { 0 }, *send;
+	struct msgchat buf, *send;
 	struct all_clients *list;
 	struct list_client *tmp=NULL;
 	list = malloc(sizeof(struct all_clients));
 	send = malloc(sizeof(struct msgchat));
 	while(1){
+		sleep(0.1);
 		i=0;
 
 		pthread_mutex_lock(&mut);
@@ -112,30 +113,27 @@ void chat(int *fd){
 	        pthread_mutex_unlock(&mut);
 
 		k=i;
-		if (tmp!=NULL)
-			for(i=0; i<k+1; i++){
-        			res = msgrcv(fd[1], &buf, sizeof(struct msgchat), list_id[i], 0);
-	 			if(res < 0){
+		if (root!=NULL)
+			for(i=0; i<k; i++){
+				res=0;
+        			res = msgrcv(fd[1], &buf, sizeof(struct msgchat), list_id[i], IPC_NOWAIT);
+		 		if(res < 0){
 					err = errno;
-        	        		if(err == ENOMSG)
-                	    			continue;
+					if(err == ENOMSG)
+						continue;
                 			perror("msgrcv");
                 			return;
 				}
-
 				pthread_mutex_lock(&mut);
 					tmp=root;
-					if(tmp == NULL)
-						continue;
 					while(tmp != NULL){
 						send->mtype = tmp->id;
 						snprintf(send->name, 256, "%s", tmp->name);
-						snprintf(send->message, 256, "%s", buf.message);
+						snprintf(send->message, 2048, "%s", buf.message);
 						msgsnd(fd[1], &send, sizeof(struct msgchat), 0);
 						tmp=tmp->next;
 					}
 				pthread_mutex_unlock(&mut);
-
 			}
 	}
 
@@ -158,14 +156,14 @@ void clients(int *fd){
 			i++;
 			tmp=tmp->next;
 		}
-		if (i < 100 )
-			sprintf(send->list[i+1], "end");
+		if (i < 100 & i>0)
+			snprintf(send->list[i+1],4, "end");
 		else
 			continue;
 		j=i+1;
 		for(i=0; i < j; i++){
 			send->mtype=list_id[i];
-			msgsnd(fd[1], &send, sizeof(struct msglist), 0);
+			msgsnd(fd[2], &send, sizeof(struct all_clients), 0);
 		}
 		pthread_mutex_unlock(&mut);
 	}
@@ -210,16 +208,15 @@ int main(){
                         tmp=tmp->next;
                 }
                 pthread_mutex_unlock(&mut);
-                if (i < 100 )
-                        sprintf(send->list[i+1], "end");
+                if (i < 100 & i > 0)
+                        snprintf(send->list[i+1], 4, "end");
                 else
                         continue;
                 j=i+1;
                 for(i=0; i < j; i++){
                         send->mtype=list_id[i];
-                        msgsnd(fd[1], &send, sizeof(struct all_clients), 0);
+                        msgsnd(fd[2], &send, sizeof(struct all_clients), 0);
                 }
-        }
+	}
 
-//	}
 }
